@@ -1,5 +1,6 @@
 import os
 import asyncio
+from threading import Thread
 from flask import Flask, request
 from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, ChatJoinRequestHandler, CallbackQueryHandler, CommandHandler, ContextTypes
@@ -33,6 +34,9 @@ CHANNELS = {
 
 # Створюємо bot application
 application = Application.builder().token(BOT_TOKEN).build()
+
+# Глобальний event loop для асинхронних операцій
+loop = None
 
 
 # ============================================
@@ -103,12 +107,6 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
     print(f"🔘 Користувач {user_id} натиснув 'Я не робот'")
 
-    # Тут можна додати перевірку підписок на канали
-    # subscribed = await check_subscriptions(user_id, context)
-    # if not subscribed:
-    #     await query.edit_message_text("❌ Спочатку підпишись на всі 3 канали!")
-    #     return
-
     # Одобрюємо заявку
     try:
         await context.bot.approve_chat_join_request(
@@ -133,26 +131,6 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
                  f"<i>Помилка: {str(e)}</i>",
             parse_mode='HTML'
         )
-
-
-async def check_subscriptions(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Перевірка підписок на всі канали (опціонально)"""
-    for channel_key, channel_info in CHANNELS.items():
-        try:
-            member = await context.bot.get_chat_member(
-                chat_id=channel_info['id'],
-                user_id=user_id
-            )
-            # Якщо не підписаний - повертаємо False
-            if member.status not in ['member', 'administrator', 'creator']:
-                print(f"❌ Користувач {user_id} не підписаний на {channel_info['name']}")
-                return False
-        except Exception as e:
-            print(f"⚠️ Не вдалося перевірити підписку на {channel_info['name']}: {e}")
-            # Можна або пропустити, або вважати що не підписаний
-            continue
-
-    return True
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -188,8 +166,11 @@ def webhook():
         json_data = request.get_json(force=True)
         update = Update.de_json(json_data, application.bot)
 
-        # Обробляємо update асинхронно
-        asyncio.run(application.process_update(update))
+        # ВАЖЛИВО: Обробляємо update в окремому event loop
+        asyncio.run_coroutine_threadsafe(
+            application.process_update(update),
+            loop
+        )
 
         return {"ok": True}
     except Exception as e:
@@ -198,11 +179,15 @@ def webhook():
 
 
 @app.route('/setwebhook', methods=['GET'])
-def set_webhook():
+def set_webhook_route():
     """Встановлення webhook (для ручного виклику)"""
     try:
         webhook_url = f"{WEBHOOK_URL}/webhook"
-        asyncio.run(application.bot.set_webhook(url=webhook_url))
+        future = asyncio.run_coroutine_threadsafe(
+            application.bot.set_webhook(url=webhook_url),
+            loop
+        )
+        future.result(timeout=10)
         return f"✅ Webhook встановлено: {webhook_url}"
     except Exception as e:
         return f"❌ Помилка: {e}"
@@ -212,29 +197,43 @@ def set_webhook():
 # ЗАПУСК БОТА
 # ============================================
 
+def run_asyncio_loop(loop):
+    """Запуск event loop в окремому потоці"""
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+
+async def setup_bot():
+    """Ініціалізація бота"""
+    await application.initialize()
+    await application.start()
+
+    # Встановлюємо webhook
+    if WEBHOOK_URL:
+        webhook_url = f"{WEBHOOK_URL}/webhook"
+        await application.bot.set_webhook(url=webhook_url)
+        print(f"✅ Webhook встановлено: {webhook_url}")
+
+
 if __name__ == '__main__':
     print("🚀 Запуск Welcome Bot...")
     print(f"📍 Webhook URL: {WEBHOOK_URL}")
     print(f"🔌 Port: {PORT}")
 
+    # Створюємо новий event loop
+    loop = asyncio.new_event_loop()
 
-    # ВАЖЛИВО: Ініціалізуємо application перед запуском
-    async def setup():
-        await application.initialize()
-        await application.start()
+    # Запускаємо event loop в окремому потоці
+    thread = Thread(target=run_asyncio_loop, args=(loop,), daemon=True)
+    thread.start()
 
-        # Встановлюємо webhook
-        if WEBHOOK_URL:
-            webhook_url = f"{WEBHOOK_URL}/webhook"
-            await application.bot.set_webhook(url=webhook_url)
-            print(f"✅ Webhook встановлено: {webhook_url}")
-
-
-    # Запускаємо setup
+    # Ініціалізуємо бота в цьому event loop
+    future = asyncio.run_coroutine_threadsafe(setup_bot(), loop)
     try:
-        asyncio.run(setup())
+        future.result(timeout=30)
+        print("✅ Бот ініціалізовано успішно!")
     except Exception as e:
-        print(f"⚠️ Помилка ініціалізації: {e}")
+        print(f"❌ Помилка ініціалізації: {e}")
 
-    # Запускаємо Flask
+    # Запускаємо Flask (він працює синхронно в основному потоці)
     app.run(host='0.0.0.0', port=PORT)
