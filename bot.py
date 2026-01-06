@@ -15,24 +15,25 @@ PORT = int(os.environ.get('PORT', 8080))
 # Канали для підписки (змінюй на свої!)
 CHANNELS = {
     'channel1': {
-        'name': 'Workers Crypto',
-        'url': 'https://t.me/+8i5494TSePE1MTgy',
+        'name': 'Канал 1',
+        'url': 'https://t.me/your_channel_1',
         'id': -1001234567890  # ID каналу (отримаєш коли додаси бота)
     },
     'channel2': {
-        'name': 'Alex Trade',
-        'url': 'https://t.me/+l8YjXgFg07lmMTky',
+        'name': 'Канал 2',
+        'url': 'https://t.me/your_channel_2',
         'id': -1001234567891
     },
     'channel3': {
-        'name': 'Маша | Trade 🌸',
-        'url': 'https://t.me/+wtYfuXMyCzg3ZmE6',
+        'name': 'Канал 3',
+        'url': 'https://t.me/your_channel_3',
         'id': -1001234567892
     }
 }
 
 # Створюємо bot application
 application = Application.builder().token(BOT_TOKEN).build()
+
 
 # ============================================
 # ОБРОБНИКИ ПОДІЙ
@@ -42,9 +43,9 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Обробка заявки на вступ в канал"""
     user = update.chat_join_request.from_user
     chat = update.chat_join_request.chat
-    
+
     print(f"✅ Нова заявка від {user.first_name} (@{user.username}) в {chat.title}")
-    
+
     # Вітальне повідомлення
     text = f"""
 👋 <b>Привіт, {user.first_name}!</b>
@@ -64,7 +65,7 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 👇 <b>Натисни кнопку нижче після підписки:</b>
 """
-    
+
     # Кнопки
     keyboard = [
         [InlineKeyboardButton("1-Й КАНАЛ →", url=CHANNELS['channel1']['url'])],
@@ -73,7 +74,7 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
         [InlineKeyboardButton("✅ Я НЕ РОБОТ", callback_data=f"verify_{user.id}_{chat.id}")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     # Відправляємо повідомлення
     try:
         await context.bot.send_message(
@@ -91,30 +92,30 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
     """Обробка натискання кнопки 'Я не робот'"""
     query = update.callback_query
     await query.answer()
-    
+
     # Парсимо дані
     data_parts = query.data.split("_")
     if data_parts[0] != "verify":
         return
-        
+
     user_id = int(data_parts[1])
     chat_id = int(data_parts[2])
-    
+
     print(f"🔘 Користувач {user_id} натиснув 'Я не робот'")
-    
+
     # Тут можна додати перевірку підписок на канали
     # subscribed = await check_subscriptions(user_id, context)
     # if not subscribed:
     #     await query.edit_message_text("❌ Спочатку підпишись на всі 3 канали!")
     #     return
-    
+
     # Одобрюємо заявку
     try:
         await context.bot.approve_chat_join_request(
             chat_id=chat_id,
             user_id=user_id
         )
-        
+
         # Змінюємо повідомлення
         await query.edit_message_text(
             text="✅ <b>Вітаю! Твою заявку одобрено!</b>\n\n"
@@ -123,7 +124,7 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
             parse_mode='HTML'
         )
         print(f"✅ Заявку одобрено для користувача {user_id}")
-        
+
     except Exception as e:
         print(f"❌ Помилка одобрення: {e}")
         await query.edit_message_text(
@@ -150,7 +151,7 @@ async def check_subscriptions(user_id: int, context: ContextTypes.DEFAULT_TYPE) 
             print(f"⚠️ Не вдалося перевірити підписку на {channel_info['name']}: {e}")
             # Можна або пропустити, або вважати що не підписаний
             continue
-    
+
     return True
 
 
@@ -169,6 +170,7 @@ application.add_handler(CommandHandler("start", start_command))
 application.add_handler(ChatJoinRequestHandler(handle_join_request))
 application.add_handler(CallbackQueryHandler(handle_verify_button))
 
+
 # ============================================
 # FLASK WEBHOOK
 # ============================================
@@ -185,10 +187,10 @@ def webhook():
     try:
         json_data = request.get_json(force=True)
         update = Update.de_json(json_data, application.bot)
-        
+
         # Обробляємо update асинхронно
         asyncio.run(application.process_update(update))
-        
+
         return {"ok": True}
     except Exception as e:
         print(f"❌ Помилка в webhook: {e}")
@@ -214,15 +216,25 @@ if __name__ == '__main__':
     print("🚀 Запуск Welcome Bot...")
     print(f"📍 Webhook URL: {WEBHOOK_URL}")
     print(f"🔌 Port: {PORT}")
-    
-    # Встановлюємо webhook при старті
-    if WEBHOOK_URL:
-        try:
+
+
+    # ВАЖЛИВО: Ініціалізуємо application перед запуском
+    async def setup():
+        await application.initialize()
+        await application.start()
+
+        # Встановлюємо webhook
+        if WEBHOOK_URL:
             webhook_url = f"{WEBHOOK_URL}/webhook"
-            asyncio.run(application.bot.set_webhook(url=webhook_url))
+            await application.bot.set_webhook(url=webhook_url)
             print(f"✅ Webhook встановлено: {webhook_url}")
-        except Exception as e:
-            print(f"⚠️ Не вдалося встановити webhook: {e}")
-    
+
+
+    # Запускаємо setup
+    try:
+        asyncio.run(setup())
+    except Exception as e:
+        print(f"⚠️ Помилка ініціалізації: {e}")
+
     # Запускаємо Flask
     app.run(host='0.0.0.0', port=PORT)
