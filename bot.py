@@ -22,6 +22,7 @@ application = Application.builder().token(BOT_TOKEN).build()
 # Глобальний event loop для асинхронних операцій
 loop = None
 
+
 # ============================================
 # ОБРОБНИКИ ПОДІЙ
 # ============================================
@@ -30,9 +31,9 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Обробка заявки на вступ в канал"""
     user = update.chat_join_request.from_user
     chat = update.chat_join_request.chat
-    
+
     print(f"✅ Нова заявка від {user.first_name} (@{user.username}) в {chat.title}")
-    
+
     # Вітальне повідомлення від Mark
     text = f"""Привіт, {user.first_name}!
 
@@ -45,11 +46,11 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
 У каналі ділюся всім що працює. Без води і теорії з підручників.
 
 Підтверджуй що ти жива людина — і входь."""
-    
+
     # Кнопка
     keyboard = [[InlineKeyboardButton("🚀 Підтверджую!", callback_data=f"verify_{user.id}_{chat.id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
+
     # Відправляємо повідомлення з банером і текстом в одному повідомленні
     try:
         # Відправляємо банер з текстом і кнопкою
@@ -68,7 +69,7 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
                 text=text,
                 reply_markup=reply_markup
             )
-        
+
         print(f"📨 Відправлено вітальне повідомлення користувачу {user.id}")
     except Exception as e:
         print(f"❌ Помилка відправки: {e}")
@@ -78,18 +79,18 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
     """Обробка натискання кнопки 'Підтверджую'"""
     query = update.callback_query
     await query.answer()
-    
+
     # Парсимо дані
     data_parts = query.data.split("_")
     if data_parts[0] != "verify":
         return
-        
+
     user_id = int(data_parts[1])
     chat_id = int(data_parts[2])
     user_name = query.from_user.first_name
-    
+
     print(f"🔘 Користувач {user_id} натиснув 'Підтверджую'")
-    
+
     # Одобрюємо заявку
     try:
         await context.bot.approve_chat_join_request(
@@ -97,13 +98,13 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
             user_id=user_id
         )
         print(f"✅ Заявку одобрено для користувача {user_id}")
-        
+
         # Видаляємо кнопку з попереднього повідомлення (фото)
         try:
             await query.edit_message_reply_markup(reply_markup=None)
         except:
             pass
-        
+
         # НАДСИЛАЄМО БАНЕР З ПОДАРУНКОМ + ТЕКСТ В ОДНОМУ ПОВІДОМЛЕННІ
         gift_text = """🎁 Подарунок на старті від мене:
 📚 Книга «Дві сторони трейдингу»
@@ -118,26 +119,31 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
 Let's make money 💵
 
 — Mark"""
-        
+
         try:
             if os.path.exists("gift_banner.png"):
                 with open("gift_banner.png", 'rb') as banner:
-                    await query.message.reply_photo(
+                    await context.bot.send_photo(
+                        chat_id=user_id,
                         photo=banner,
                         caption=gift_text
                     )
                 print(f"🎁 Банер з подарунком надіслано користувачу {user_id}")
             else:
-                await query.message.reply_text(gift_text)
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=gift_text
+                )
         except Exception as banner_error:
             print(f"⚠️ Помилка відправки банера: {banner_error}")
-        
+
         # АВТОМАТИЧНО НАДСИЛАЄМО PDF КНИГУ
         try:
             # Перевіряємо чи існує файл
             if os.path.exists(PDF_PATH):
                 with open(PDF_PATH, 'rb') as pdf_file:
-                    await query.message.reply_document(
+                    await context.bot.send_document(
+                        chat_id=user_id,
                         document=pdf_file,
                         filename="Дві_сторони_трейдингу_Mark_Inside.pdf",
                         caption="📚 Твій подарунок від Mark Inside!\n\nЧитай, вчись, заробляй 💰"
@@ -145,15 +151,17 @@ Let's make money 💵
                 print(f"📚 PDF книгу надіслано користувачу {user_id}")
             else:
                 print(f"⚠️ Файл {PDF_PATH} не знайдено!")
-                await query.message.reply_text(
-                    "⚠️ Технічна помилка при відправці книги. Зверніться до адміністратора."
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text="⚠️ Технічна помилка при відправці книги. Зверніться до адміністратора."
                 )
         except Exception as pdf_error:
             print(f"❌ Помилка відправки PDF: {pdf_error}")
-            await query.message.reply_text(
-                "⚠️ Не вдалося надіслати книгу. Спробуйте звернутися до адміністратора."
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="⚠️ Не вдалося надіслати книгу. Спробуйте звернутися до адміністратора."
             )
-        
+
     except Exception as e:
         print(f"❌ Помилка одобрення: {e}")
         # Відповідаємо на callback query, але не редагуємо photo message
@@ -181,6 +189,7 @@ application.add_handler(CommandHandler("start", start_command))
 application.add_handler(ChatJoinRequestHandler(handle_join_request))
 application.add_handler(CallbackQueryHandler(handle_verify_button))
 
+
 # ============================================
 # FLASK WEBHOOK
 # ============================================
@@ -197,13 +206,13 @@ def webhook():
     try:
         json_data = request.get_json(force=True)
         update = Update.de_json(json_data, application.bot)
-        
+
         # ВАЖЛИВО: Обробляємо update в окремому event loop
         asyncio.run_coroutine_threadsafe(
             application.process_update(update),
             loop
         )
-        
+
         return {"ok": True}
     except Exception as e:
         print(f"❌ Помилка в webhook: {e}")
@@ -239,7 +248,7 @@ async def setup_bot():
     """Ініціалізація бота"""
     await application.initialize()
     await application.start()
-    
+
     # Встановлюємо webhook
     if WEBHOOK_URL:
         webhook_url = f"{WEBHOOK_URL}/webhook"
@@ -251,14 +260,14 @@ if __name__ == '__main__':
     print("🚀 Запуск Mark Inside Bot...")
     print(f"📍 Webhook URL: {WEBHOOK_URL}")
     print(f"🔌 Port: {PORT}")
-    
+
     # Створюємо новий event loop
     loop = asyncio.new_event_loop()
-    
+
     # Запускаємо event loop в окремому потоці
     thread = Thread(target=run_asyncio_loop, args=(loop,), daemon=True)
     thread.start()
-    
+
     # Ініціалізуємо бота в цьому event loop
     future = asyncio.run_coroutine_threadsafe(setup_bot(), loop)
     try:
@@ -266,6 +275,6 @@ if __name__ == '__main__':
         print("✅ Бот ініціалізовано успішно!")
     except Exception as e:
         print(f"❌ Помилка ініціалізації: {e}")
-    
+
     # Запускаємо Flask (він працює синхронно в основному потоці)
     app.run(host='0.0.0.0', port=PORT)
