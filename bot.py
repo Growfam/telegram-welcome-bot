@@ -105,12 +105,6 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
         except:
             pass
 
-        # Відправляємо нове повідомлення
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="✅ Готово! Ти всередині."
-        )
-
         # НАДСИЛАЄМО БАНЕР З ПОДАРУНКОМ + ТЕКСТ В ОДНОМУ ПОВІДОМЛЕННІ
         gift_text = """🎁 Подарунок на старті від мене:
 📚 Книга «Дві сторони трейдингу»
@@ -170,12 +164,14 @@ Let's make money 💵
 
     except Exception as e:
         print(f"❌ Помилка одобрення: {e}")
-        await query.edit_message_text(
-            text=f"❌ <b>Помилка при одобренні заявки</b>\n\n"
-                 f"Спробуй ще раз або напиши адміністратору.\n\n"
-                 f"<i>Помилка: {str(e)}</i>",
-            parse_mode='HTML'
-        )
+        # Відповідаємо на callback query, але не редагуємо photo message
+        try:
+            await query.answer(
+                text=f"❌ Помилка: {str(e)[:100]}",
+                show_alert=True
+            )
+        except:
+            pass
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
