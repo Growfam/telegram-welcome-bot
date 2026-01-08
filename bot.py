@@ -34,6 +34,12 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     print(f"✅ Нова заявка від {user.first_name} (@{user.username}) в {chat.title}")
 
+    # Отримуємо username бота
+    bot_username = (await context.bot.get_me()).username
+
+    # 🔥 Створюємо deep link URL - користувач натисне і автоматично відкриє бота
+    deep_link = f"https://t.me/{bot_username}?start=verify_{user.id}_{chat.id}"
+
     # Вітальне повідомлення від Mark
     text = f"""Привіт, {user.first_name}!
 
@@ -47,13 +53,12 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 Підтверджуй що ти жива людина — і входь."""
 
-    # Кнопка
-    keyboard = [[InlineKeyboardButton("🚀 Підтверджую!", callback_data=f"verify_{user.id}_{chat.id}")]]
+    # 🔥 URL кнопка замість callback - це дає дозвіл боту писати!
+    keyboard = [[InlineKeyboardButton("🚀 Підтверджую!", url=deep_link)]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Відправляємо повідомлення з банером і текстом в одному повідомленні
+    # Відправляємо повідомлення з банером і текстом
     try:
-        # Відправляємо банер з текстом і кнопкою
         if os.path.exists("welcome_banner.png"):
             with open("welcome_banner.png", 'rb') as banner:
                 await context.bot.send_photo(
@@ -63,7 +68,6 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
                     reply_markup=reply_markup
                 )
         else:
-            # Якщо банера немає - просто текст
             await context.bot.send_message(
                 chat_id=user.id,
                 text=text,
@@ -71,46 +75,45 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
 
         print(f"📨 Відправлено вітальне повідомлення користувачу {user.id}")
+        print(f"🔗 Deep link: {deep_link}")
     except Exception as e:
         print(f"❌ Помилка відправки: {e}")
 
 
-async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка натискання кнопки 'Підтверджую'"""
-    query = update.callback_query
-    await query.answer()
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /start - обробляє deep link параметри"""
+    user = update.effective_user
 
-    # Парсимо дані
-    data_parts = query.data.split("_")
-    if data_parts[0] != "verify":
-        return
+    # Перевіряємо чи є start параметр (з deep link кнопки)
+    if context.args and len(context.args) > 0:
+        param = context.args[0]
 
-    user_id = int(data_parts[1])
-    chat_id = int(data_parts[2])
+        # Якщо це verify параметр (користувач натиснув кнопку "Підтверджую")
+        if param.startswith("verify_"):
+            try:
+                # Парсимо параметр: verify_USER_ID_CHAT_ID
+                parts = param.split("_")
+                user_id = int(parts[1])
+                chat_id = int(parts[2])
 
-    # 🔥 ВИПРАВЛЕННЯ: Використовуємо chat_id з повідомлення де натиснута кнопка
-    # Це гарантує що ми пишемо в правильний чат (особисті повідомлення з користувачем)
-    message_chat_id = query.message.chat_id
+                print(f"🔘 Користувач {user_id} натиснув deep link кнопку")
 
-    print(f"🔘 Користувач {user_id} натиснув 'Підтверджую'")
-    print(f"📍 message_chat_id: {message_chat_id}, user_id from callback: {user_id}")
+                # Перевіряємо чи це той самий користувач
+                if user.id != user_id:
+                    await update.message.reply_text("❌ Помилка: невідповідність користувача")
+                    return
 
-    # Одобрюємо заявку
-    try:
-        await context.bot.approve_chat_join_request(
-            chat_id=chat_id,
-            user_id=user_id
-        )
-        print(f"✅ Заявку одобрено для користувача {user_id}")
+                # 🎯 ОДОБРЮЄМО ЗАЯВКУ
+                await context.bot.approve_chat_join_request(
+                    chat_id=chat_id,
+                    user_id=user_id
+                )
+                print(f"✅ Заявку одобрено для користувача {user_id}")
 
-        # Видаляємо кнопку з попереднього повідомлення (фото)
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except:
-            pass
+                # 🎁 НАДСИЛАЄМО БАНЕР З ПОДАРУНКОМ
+                gift_text = """Готово! Ти всередині.
 
-        # НАДСИЛАЄМО БАНЕР З ПОДАРУНКОМ + ТЕКСТ В ОДНОМУ ПОВІДОМЛЕННІ
-        gift_text = """🎁 Подарунок на старті від мене:
+🎁 Подарунок на старті від мене:
 📚 Книга «Дві сторони трейдингу»
 
 Моя автобіографічна історія: від -$18,400 втрат і боргів до +$18,000/місяць. Без прикрас. Тільки правда про помилки, падіння і шлях до профіту.
@@ -124,70 +127,55 @@ Let's make money 💵
 
 — Mark"""
 
-        try:
-            if os.path.exists("gift_banner.png"):
-                with open("gift_banner.png", 'rb') as banner:
-                    # 🔥 ВИКОРИСТОВУЄМО query.message.reply_photo() замість context.bot.send_photo()
-                    await query.message.reply_photo(
-                        photo=banner,
-                        caption=gift_text
-                    )
-                print(f"🎁 Банер з подарунком надіслано користувачу {message_chat_id}")
-            else:
-                # 🔥 ВИКОРИСТОВУЄМО query.message.reply_text()
-                await query.message.reply_text(text=gift_text)
-        except Exception as banner_error:
-            print(f"⚠️ Помилка відправки банера: {banner_error}")
+                try:
+                    if os.path.exists("gift_banner.png"):
+                        with open("gift_banner.png", 'rb') as banner:
+                            await update.message.reply_photo(
+                                photo=banner,
+                                caption=gift_text
+                            )
+                        print(f"🎁 Банер з подарунком надіслано користувачу {user_id}")
+                    else:
+                        await update.message.reply_text(text=gift_text)
+                except Exception as banner_error:
+                    print(f"⚠️ Помилка відправки банера: {banner_error}")
 
-        # АВТОМАТИЧНО НАДСИЛАЄМО PDF КНИГУ
-        try:
-            # Перевіряємо чи існує файл
-            if os.path.exists(PDF_PATH):
-                with open(PDF_PATH, 'rb') as pdf_file:
-                    # 🔥 ВИКОРИСТОВУЄМО query.message.reply_document()
-                    await query.message.reply_document(
-                        document=pdf_file,
-                        filename="Дві_сторони_трейдингу_Mark_Inside.pdf",
-                        caption="📚 Твій подарунок від Mark Inside!\n\nЧитай, вчись, заробляй 💰"
-                    )
-                print(f"📚 PDF книгу надіслано користувачу {message_chat_id}")
-            else:
-                print(f"⚠️ Файл {PDF_PATH} не знайдено!")
-                await query.message.reply_text(
-                    text="⚠️ Технічна помилка при відправці книги. Зверніться до адміністратора."
+                # 📚 АВТОМАТИЧНО НАДСИЛАЄМО PDF КНИГУ
+                try:
+                    if os.path.exists(PDF_PATH):
+                        with open(PDF_PATH, 'rb') as pdf_file:
+                            await update.message.reply_document(
+                                document=pdf_file,
+                                filename="Дві_сторони_трейдингу_Mark_Inside.pdf",
+                                caption="📚 Твій подарунок від Mark Inside!\n\nЧитай, вчись, заробляй 💰"
+                            )
+                        print(f"📚 PDF книгу надіслано користувачу {user_id}")
+                    else:
+                        print(f"⚠️ Файл {PDF_PATH} не знайдено!")
+                        await update.message.reply_text(
+                            text="⚠️ Технічна помилка при відправці книги. Зверніться до адміністратора."
+                        )
+                except Exception as pdf_error:
+                    print(f"❌ Помилка відправки PDF: {pdf_error}")
+
+            except Exception as e:
+                print(f"❌ Помилка обробки verify параметра: {e}")
+                await update.message.reply_text(
+                    "❌ Помилка обробки заявки. Спробуйте ще раз або зверніться до адміністратора."
                 )
-        except Exception as pdf_error:
-            print(f"❌ Помилка відправки PDF: {pdf_error}")
-            await query.message.reply_text(
-                text="⚠️ Не вдалося надіслати книгу. Спробуйте звернутися до адміністратора."
-            )
-
-    except Exception as e:
-        print(f"❌ Помилка одобрення: {e}")
-        # Відповідаємо на callback query, але не редагуємо photo message
-        try:
-            await query.answer(
-                text=f"❌ Помилка: {str(e)[:100]}",
-                show_alert=True
-            )
-        except:
-            pass
-
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /start"""
-    await update.message.reply_text(
-        "👋 <b>Привіт! Я Mark Inside Bot!</b>\n\n"
-        "Мене потрібно додати адміністратором в канал з увімкненим 'Approve New Members'.\n\n"
-        "Коли хтось подає заявку на вступ - я автоматично надішлю йому вітальне повідомлення від Mark!",
-        parse_mode='HTML'
-    )
+    else:
+        # Звичайний /start без параметрів
+        await update.message.reply_text(
+            "👋 <b>Привіт! Я Mark Inside Bot!</b>\n\n"
+            "Мене потрібно додати адміністратором в канал з увімкненим 'Approve New Members'.\n\n"
+            "Коли хтось подає заявку на вступ - я автоматично надішлю йому вітальне повідомлення від Mark!",
+            parse_mode='HTML'
+        )
 
 
 # Додаємо обробники
 application.add_handler(CommandHandler("start", start_command))
 application.add_handler(ChatJoinRequestHandler(handle_join_request))
-application.add_handler(CallbackQueryHandler(handle_verify_button))
 
 
 # ============================================
