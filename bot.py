@@ -127,17 +127,15 @@ Let's make money 💵
         try:
             if os.path.exists("gift_banner.png"):
                 with open("gift_banner.png", 'rb') as banner:
-                    await context.bot.send_photo(
-                        chat_id=message_chat_id,  # 🔥 ВИПРАВЛЕНО
+                    # 🔥 ВИКОРИСТОВУЄМО query.message.reply_photo() замість context.bot.send_photo()
+                    await query.message.reply_photo(
                         photo=banner,
                         caption=gift_text
                     )
                 print(f"🎁 Банер з подарунком надіслано користувачу {message_chat_id}")
             else:
-                await context.bot.send_message(
-                    chat_id=message_chat_id,  # 🔥 ВИПРАВЛЕНО
-                    text=gift_text
-                )
+                # 🔥 ВИКОРИСТОВУЄМО query.message.reply_text()
+                await query.message.reply_text(text=gift_text)
         except Exception as banner_error:
             print(f"⚠️ Помилка відправки банера: {banner_error}")
 
@@ -146,8 +144,8 @@ Let's make money 💵
             # Перевіряємо чи існує файл
             if os.path.exists(PDF_PATH):
                 with open(PDF_PATH, 'rb') as pdf_file:
-                    await context.bot.send_document(
-                        chat_id=message_chat_id,  # 🔥 ВИПРАВЛЕНО
+                    # 🔥 ВИКОРИСТОВУЄМО query.message.reply_document()
+                    await query.message.reply_document(
                         document=pdf_file,
                         filename="Дві_сторони_трейдингу_Mark_Inside.pdf",
                         caption="📚 Твій подарунок від Mark Inside!\n\nЧитай, вчись, заробляй 💰"
@@ -155,14 +153,12 @@ Let's make money 💵
                 print(f"📚 PDF книгу надіслано користувачу {message_chat_id}")
             else:
                 print(f"⚠️ Файл {PDF_PATH} не знайдено!")
-                await context.bot.send_message(
-                    chat_id=message_chat_id,  # 🔥 ВИПРАВЛЕНО
+                await query.message.reply_text(
                     text="⚠️ Технічна помилка при відправці книги. Зверніться до адміністратора."
                 )
         except Exception as pdf_error:
             print(f"❌ Помилка відправки PDF: {pdf_error}")
-            await context.bot.send_message(
-                chat_id=message_chat_id,  # 🔥 ВИПРАВЛЕНО
+            await query.message.reply_text(
                 text="⚠️ Не вдалося надіслати книгу. Спробуйте звернутися до адміністратора."
             )
 
