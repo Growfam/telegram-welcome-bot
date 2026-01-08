@@ -13,24 +13,8 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN')
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', '')
 PORT = int(os.environ.get('PORT', 8080))
 
-# Канали для підписки (змінюй на свої!)
-CHANNELS = {
-    'channel1': {
-        'name': 'Канал 1',
-        'url': 'https://t.me/your_channel_1',
-        'id': -1001234567890  # ID каналу (отримаєш коли додаси бота)
-    },
-    'channel2': {
-        'name': 'Канал 2',
-        'url': 'https://t.me/your_channel_2',
-        'id': -1001234567891
-    },
-    'channel3': {
-        'name': 'Канал 3',
-        'url': 'https://t.me/your_channel_3',
-        'id': -1001234567892
-    }
-}
+# Шлях до PDF книги
+PDF_PATH = "book.pdf"
 
 # Створюємо bot application
 application = Application.builder().token(BOT_TOKEN).build()
@@ -50,42 +34,38 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     print(f"✅ Нова заявка від {user.first_name} (@{user.username}) в {chat.title}")
 
-    # Вітальне повідомлення
-    text = f"""
-👋 <b>Привіт, {user.first_name}!</b>
+    # Вітальне повідомлення від Mark
+    text = f"""Привіт, {user.first_name}!
 
-✅ <b>ВАМ ПОДАРУНОК - 890 USDT!</b>
+Це Mark.
 
-Щоб отримати доступ до каналу "<i>{chat.title}</i>", потрібно:
+6 років тому я почав з $500. Зараз трейдинг — моє основне джерело доходу.
 
-📌 <b>Підписатися на ТРИ канали:</b>
+Секрет? Немає секрету. Є стратегія, дисципліна і бажання заробляти.
 
-1️⃣ {CHANNELS['channel1']['name']}
-2️⃣ {CHANNELS['channel2']['name']}
-3️⃣ {CHANNELS['channel3']['name']}
+У каналі ділюся всім що працює. Без води і теорії з підручників.
 
-⚡️ <b>Завтра вхід буде платним (890$)</b>
-Заходь прямо зараз <b>БЕЗКОШТОВНО!</b>
+Підтверджуй що ти жива людина — і входь."""
 
-👇 <b>Натисни кнопку нижче після підписки:</b>
-"""
-
-    # Кнопки
-    keyboard = [
-        [InlineKeyboardButton("1-Й КАНАЛ →", url=CHANNELS['channel1']['url'])],
-        [InlineKeyboardButton("2-Й КАНАЛ →", url=CHANNELS['channel2']['url'])],
-        [InlineKeyboardButton("3-Й КАНАЛ →", url=CHANNELS['channel3']['url'])],
-        [InlineKeyboardButton("✅ Я НЕ РОБОТ", callback_data=f"verify_{user.id}_{chat.id}")]
-    ]
+    # Кнопка
+    keyboard = [[InlineKeyboardButton("🚀 Підтверджую!", callback_data=f"verify_{user.id}_{chat.id}")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Відправляємо повідомлення
+    # Відправляємо повідомлення з банером
     try:
+        # Спочатку надсилаємо банер
+        if os.path.exists("welcome_banner.png"):
+            with open("welcome_banner.png", 'rb') as banner:
+                await context.bot.send_photo(
+                    chat_id=user.id,
+                    photo=banner
+                )
+
+        # Потім текст з кнопкою
         await context.bot.send_message(
             chat_id=user.id,
             text=text,
-            reply_markup=reply_markup,
-            parse_mode='HTML'
+            reply_markup=reply_markup
         )
         print(f"📨 Відправлено вітальне повідомлення користувачу {user.id}")
     except Exception as e:
@@ -93,7 +73,7 @@ async def handle_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка натискання кнопки 'Я не робот'"""
+    """Обробка натискання кнопки 'Підтверджую'"""
     query = update.callback_query
     await query.answer()
 
@@ -104,8 +84,9 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
     user_id = int(data_parts[1])
     chat_id = int(data_parts[2])
+    user_name = query.from_user.first_name
 
-    print(f"🔘 Користувач {user_id} натиснув 'Я не робот'")
+    print(f"🔘 Користувач {user_id} натиснув 'Підтверджую'")
 
     # Одобрюємо заявку
     try:
@@ -113,15 +94,64 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
             chat_id=chat_id,
             user_id=user_id
         )
-
-        # Змінюємо повідомлення
-        await query.edit_message_text(
-            text="✅ <b>Вітаю! Твою заявку одобрено!</b>\n\n"
-                 "🎉 Тепер ти маєш доступ до каналу!\n"
-                 "💰 Твій бонус чекає на тебе всередині!",
-            parse_mode='HTML'
-        )
         print(f"✅ Заявку одобрено для користувача {user_id}")
+
+        # Повідомлення після одобрення
+        success_text = """Готово! Ти всередині.
+
+🎁 Подарунок на старті від мене:
+📚 Книга «Дві сторони трейдингу»
+
+Моя автобіографічна історія: від -$18,400 втрат і боргів до +$18,000/місяць. Без прикрас. Тільки правда про помилки, падіння і шлях до профіту.
+
+📖 Книга вже у тебе в чаті 👆
+
+💡 Порада від Mark:
+Коли я втратив все, у мене було два шляхи: здатися або вчитися. Я обрав другий. Проаналізував кожну помилку. Змінив підхід. Зараз трейдинг — мій основний дохід. Твій вибір — що обереш ти?
+
+Let's make money 💵
+
+— Mark"""
+
+        # Змінюємо попереднє повідомлення
+        await query.edit_message_text(text=success_text)
+
+        # НАДСИЛАЄМО БАНЕР З ПОДАРУНКОМ
+        try:
+            if os.path.exists("gift_banner.png"):
+                with open("gift_banner.png", 'rb') as banner:
+                    await context.bot.send_photo(
+                        chat_id=user_id,
+                        photo=banner
+                    )
+                print(f"🎁 Банер з подарунком надіслано користувачу {user_id}")
+        except Exception as banner_error:
+            print(f"⚠️ Помилка відправки банера: {banner_error}")
+
+        # АВТОМАТИЧНО НАДСИЛАЄМО PDF КНИГУ
+        try:
+            # Перевіряємо чи існує файл
+            if os.path.exists(PDF_PATH):
+                with open(PDF_PATH, 'rb') as pdf_file:
+                    await context.bot.send_document(
+                        chat_id=user_id,
+                        document=pdf_file,
+                        filename="Дві_сторони_трейдингу_Mark_Inside.pdf",
+                        caption="📚 Твій подарунок від Mark Inside!\n\nЧитай, вчись, заробляй 💰"
+                    )
+                print(f"📚 PDF книгу надіслано користувачу {user_id}")
+            else:
+                print(f"⚠️ Файл {PDF_PATH} не знайдено!")
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text="⚠️ Технічна помилка при відправці книги. Зверніться до адміністратора."
+                )
+        except Exception as pdf_error:
+            print(f"❌ Помилка відправки PDF: {pdf_error}")
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="⚠️ Не вдалося надіслати книгу. Спробуйте звернутися до адміністратора."
+            )
 
     except Exception as e:
         print(f"❌ Помилка одобрення: {e}")
@@ -136,9 +166,9 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start"""
     await update.message.reply_text(
-        "👋 <b>Привіт! Я Welcome Bot!</b>\n\n"
+        "👋 <b>Привіт! Я Mark Inside Bot!</b>\n\n"
         "Мене потрібно додати адміністратором в канал з увімкненим 'Approve New Members'.\n\n"
-        "Коли хтось подає заявку на вступ - я автоматично надішлю йому вітальне повідомлення!",
+        "Коли хтось подає заявку на вступ - я автоматично надішлю йому вітальне повідомлення від Mark!",
         parse_mode='HTML'
     )
 
@@ -156,7 +186,7 @@ application.add_handler(CallbackQueryHandler(handle_verify_button))
 @app.route('/')
 def index():
     """Головна сторінка"""
-    return "🤖 Welcome Bot is running!"
+    return "🤖 Mark Inside Bot is running!"
 
 
 @app.route('/webhook', methods=['POST'])
@@ -216,7 +246,7 @@ async def setup_bot():
 
 
 if __name__ == '__main__':
-    print("🚀 Запуск Welcome Bot...")
+    print("🚀 Запуск Mark Inside Bot...")
     print(f"📍 Webhook URL: {WEBHOOK_URL}")
     print(f"🔌 Port: {PORT}")
 
