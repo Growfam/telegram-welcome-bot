@@ -87,9 +87,13 @@ async def handle_verify_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
     user_id = int(data_parts[1])
     chat_id = int(data_parts[2])
-    user_name = query.from_user.first_name
+
+    # 🔥 ВИПРАВЛЕННЯ: Використовуємо chat_id з повідомлення де натиснута кнопка
+    # Це гарантує що ми пишемо в правильний чат (особисті повідомлення з користувачем)
+    message_chat_id = query.message.chat_id
 
     print(f"🔘 Користувач {user_id} натиснув 'Підтверджую'")
+    print(f"📍 message_chat_id: {message_chat_id}, user_id from callback: {user_id}")
 
     # Одобрюємо заявку
     try:
@@ -124,14 +128,14 @@ Let's make money 💵
             if os.path.exists("gift_banner.png"):
                 with open("gift_banner.png", 'rb') as banner:
                     await context.bot.send_photo(
-                        chat_id=user_id,
+                        chat_id=message_chat_id,  # 🔥 ВИПРАВЛЕНО
                         photo=banner,
                         caption=gift_text
                     )
-                print(f"🎁 Банер з подарунком надіслано користувачу {user_id}")
+                print(f"🎁 Банер з подарунком надіслано користувачу {message_chat_id}")
             else:
                 await context.bot.send_message(
-                    chat_id=user_id,
+                    chat_id=message_chat_id,  # 🔥 ВИПРАВЛЕНО
                     text=gift_text
                 )
         except Exception as banner_error:
@@ -143,22 +147,22 @@ Let's make money 💵
             if os.path.exists(PDF_PATH):
                 with open(PDF_PATH, 'rb') as pdf_file:
                     await context.bot.send_document(
-                        chat_id=user_id,
+                        chat_id=message_chat_id,  # 🔥 ВИПРАВЛЕНО
                         document=pdf_file,
                         filename="Дві_сторони_трейдингу_Mark_Inside.pdf",
                         caption="📚 Твій подарунок від Mark Inside!\n\nЧитай, вчись, заробляй 💰"
                     )
-                print(f"📚 PDF книгу надіслано користувачу {user_id}")
+                print(f"📚 PDF книгу надіслано користувачу {message_chat_id}")
             else:
                 print(f"⚠️ Файл {PDF_PATH} не знайдено!")
                 await context.bot.send_message(
-                    chat_id=user_id,
+                    chat_id=message_chat_id,  # 🔥 ВИПРАВЛЕНО
                     text="⚠️ Технічна помилка при відправці книги. Зверніться до адміністратора."
                 )
         except Exception as pdf_error:
             print(f"❌ Помилка відправки PDF: {pdf_error}")
             await context.bot.send_message(
-                chat_id=user_id,
+                chat_id=message_chat_id,  # 🔥 ВИПРАВЛЕНО
                 text="⚠️ Не вдалося надіслати книгу. Спробуйте звернутися до адміністратора."
             )
 
